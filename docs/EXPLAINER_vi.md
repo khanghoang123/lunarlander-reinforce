@@ -122,19 +122,29 @@ Trừ đi một **baseline** `b(sₜ)` khỏi return mà **không làm lệch (b
 Chọn `b(sₜ) = V(sₜ)` (giá trị kỳ vọng của state) thì `Aₜ = Gₜ − V(sₜ)` chính là **advantage**: "action này tốt hơn / tệ hơn mức trung bình bao nhiêu". Việc trừ baseline **giảm variance** → học nhanh và ổn định hơn.
 
 ### Hiện thực trong dự án
-- Mạng `PolicyWithValue` dùng **chung thân (trunk)** FC1→FC2, tách 2 đầu: `policy_head` (action) và `value_head` (V(s)).
+- Mạng `PolicyWithValue` gồm **2 mạng tách rời (separate networks)**: mạng policy (FC1→FC2→`policy_head`) và mạng value độc lập (v_FC1→v_FC2→`value_head` → V(s)). Tách riêng để **value loss không lấn át** gradient của policy (xem mục ⚠️ bên dưới).
 - Loss gồm 2 phần:
   ```python
-  policy_loss = Σ_t (-log_prob_t * advantage_t)      # advantage = G_t - V(s_t).detach()
-  value_loss  = MSE( V(s_t), G_t )                   # huấn luyện baseline
-  loss = policy_loss + 0.5 * value_loss
+  value_loss = MSE( V(sₜ), Gₜ )                       # train V trên RETURN GỐC Gₜ (target dừng/stationary)
+  Aₜ = Gₜ − V(sₜ).detach()                            # advantage, detach baseline → không bias
+  Aₜ = (Aₜ − mean(A)) / (std(A) + eps)                # CHỈ chuẩn hoá ADVANTAGE cho policy gradient
+  policy_loss = Σₜ (−log_probₜ · Aₜ)
+  loss = policy_loss + 0.5 · value_loss
   ```
 - `advantage` dùng `V(s).detach()` để baseline **chỉ giảm variance**, không tạo bias cho gradient của policy.
+
+> ⚠️ **Vì sao train V trên return *gốc* chứ không phải return *đã chuẩn hoá*?**
+> Nếu chuẩn hoá return *theo từng episode* rồi lấy đó làm target cho `V`, thì cùng 1 state sẽ có target khác nhau tuỳ tổng return của episode → **mục tiêu không dừng (non-stationary)**, làm hỏng ý nghĩa của baseline. Cách đúng (Sutton & Barto §13.4): huấn luyện `V` trên `Gₜ` gốc (target ổn định), và **chỉ chuẩn hoá advantage** để giữ policy gradient gọn về thang đo, ít phương sai.
+>
+> Vì `Gₜ` của LunarLander có biên độ lớn (hàng trăm) → `value_loss` lớn. Nếu policy & value **dùng chung trunk**, gradient từ value loss sẽ lấn át và phá đặc trưng của policy (thực nghiệm: entropy sụp về ~0, reward rơi xuống −3000). Vì vậy ta **tách riêng 2 mạng**.
+
+### Lưu best-checkpoint (chống dao động cuối)
+REINFORCE phương sai cao nên policy *cuối cùng* có thể tệ hơn policy tốt nhất giữa chừng. Cả 2 thuật toán đều **lưu lại bộ trọng số đạt best avg-100** trong lúc train rồi **nạp lại trước khi đánh giá** (`src/reinforce.py::_track_best`), nên số liệu eval phản ánh checkpoint tốt nhất chứ không phải checkpoint bị sụp ở cuối.
 
 Xem `src/reinforce.py::reinforce_with_baseline`.
 
 ### Kỳ vọng kết quả
-REINFORCE + Baseline thường **đạt mốc 200 sớm hơn**, **đường học mượt hơn** và **ổn định hơn** so với REINFORCE thuần. Bảng/biểu đồ so sánh được hiển thị trực tiếp trong Gradio demo (tab "Tổng quan & So sánh").
+REINFORCE + Baseline **đạt mốc 200 (solved)** trong khi REINFORCE thuần thường **chững lại quanh ~130–140 và không solve**; đường học của bản baseline cũng **mượt và cao hơn**. Bảng/biểu đồ so sánh được hiển thị trực tiếp trong Gradio demo (tab "Tổng quan & So sánh") — số liệu cụ thể đọc động từ `checkpoints/*_history.json`.
 
 ---
 
@@ -167,8 +177,8 @@ lunarlander-reinforce/
 pip install -r requirements.txt
 
 # Huấn luyện cả 2 agent
-python -m src.train --algo reinforce          --episodes 3000 --lr 3e-3
-python -m src.train --algo reinforce_baseline --episodes 3000 --lr 3e-3
+python -m src.train --algo reinforce          --episodes 3000 --lr 1e-3
+python -m src.train --algo reinforce_baseline --episodes 3000 --lr 1e-3
 
 # Chạy demo
 python app.py        # mở http://localhost:7860

@@ -50,19 +50,36 @@ def load_histories() -> Dict[str, dict]:
     return histories
 
 
+def load_experiment() -> Dict[str, dict]:
+    """Multi-seed aggregate written by scripts.finalize_experiment (optional)."""
+    path = os.path.join(CKPT_DIR, "experiment.json")
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return {}
+
+
 def build_summary_table(histories: Dict[str, dict]) -> pd.DataFrame:
+    exp = load_experiment()
     rows = []
     for algo, hist in histories.items():
         scores = hist.get("avg_scores", [])
-        # First episode where the rolling avg crosses the "solved" threshold.
         solved_at = next((i for i, v in enumerate(scores) if v >= 200), None)
-        rows.append({
+        row = {
             "Thuật toán": plotting.LABELS.get(algo, algo),
-            "Eval mean ± std": f"{hist.get('eval_mean', 0):.1f} ± {hist.get('eval_std', 0):.1f}",
-            "Best avg-100": f"{max(scores):.1f}" if scores else "-",
-            "Episode đạt ≥200": solved_at if solved_at is not None else "chưa",
-            "Train time (s)": f"{hist.get('train_time_sec', 0):.0f}",
-        })
+            "Eval (demo, seed 0)": f"{hist.get('eval_mean', 0):.1f} ± {hist.get('eval_std', 0):.1f}",
+            "Đạt ≥200 (seed 0)": f"ep {solved_at}" if solved_at is not None else "chưa",
+        }
+        agg = exp.get(algo)
+        if agg:
+            row["Eval TB (3 seed)"] = f"{agg['eval_mean_avg']:.1f} ± {agg['eval_mean_std']:.1f}"
+            row["Eval-std TB ↓ (3 seed)"] = f"{agg['per_seed_eval_std_mean']:.1f}"
+            row["Best avg-100 (3 seed)"] = f"{agg['best_avg_mean']:.1f} ± {agg['best_avg_std']:.1f}"
+            row["Solved (3 seed)"] = f"{agg['n_solved']}/{agg['n_seeds']}"
+        else:
+            row["Best avg-100"] = f"{max(scores):.1f}" if scores else "-"
+            row["Train time (s)"] = f"{hist.get('train_time_sec', 0):.0f}"
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -72,8 +89,8 @@ def refresh_overview():
         empty = pd.DataFrame([{"Thông báo": "Chưa có checkpoint. Hãy chạy: python -m src.train"}])
         return None, None, None, None, empty
     return (
-        plotting.learning_curve(histories, "Learning curve — REINFORCE vs REINFORCE+Baseline"),
-        plotting.comparison_bars(histories),
+        plotting.learning_curve(histories, "Learning curve (seed 0) — REINFORCE vs REINFORCE+Baseline"),
+        plotting.comparison_bars(histories, load_experiment()),
         plotting.reward_distribution(histories),
         plotting.episode_length_curve(histories),
         build_summary_table(histories),
@@ -159,11 +176,14 @@ So sánh **REINFORCE thuần (theo slide)** với **REINFORCE + Baseline** (thê
 
 
 def build_app():
-    with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue"), title="REINFORCE LunarLander") as demo:
+    with gr.Blocks(title="REINFORCE LunarLander") as demo:
         gr.Markdown(INTRO)
 
         with gr.Tab("📊 Tổng quan & So sánh"):
-            gr.Markdown("Kết quả đã huấn luyện sẵn (2000 episodes mỗi thuật toán).")
+            gr.Markdown("Kết quả đã huấn luyện sẵn (3000 episodes, lr=1e-3). "
+                        "Learning curve/phân phối là **run seed 0**; cột so sánh & bảng có "
+                        "thêm **trung bình ± std qua 3 seed** để so sánh công bằng "
+                        "(REINFORCE phương sai cao).")
             refresh_btn = gr.Button("🔄 Tải / làm mới kết quả", variant="primary")
             table = gr.Dataframe(label="Bảng tổng kết", interactive=False)
             with gr.Row():
@@ -196,7 +216,7 @@ def build_app():
                                    value=ALGO_LABELS["reinforce"], label="Thuật toán")
             with gr.Row():
                 ep_tr = gr.Slider(100, 2000, value=400, step=100, label="Số episodes")
-                lr_tr = gr.Slider(1e-4, 5e-2, value=1e-2, step=1e-4, label="Learning rate")
+                lr_tr = gr.Slider(1e-4, 5e-2, value=1e-3, step=1e-4, label="Learning rate")
             with gr.Row():
                 gamma_tr = gr.Slider(0.90, 0.999, value=0.99, step=0.001, label="Gamma")
                 h_tr = gr.Slider(16, 128, value=64, step=16, label="Hidden size")
@@ -213,4 +233,5 @@ def build_app():
 
 if __name__ == "__main__":
     app = build_app()
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    app.launch(server_name="0.0.0.0", server_port=7860,
+               theme=gr.themes.Soft(primary_hue="blue"))

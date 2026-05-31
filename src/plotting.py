@@ -97,16 +97,25 @@ def episode_length_curve(histories: Dict[str, dict]):
     return fig
 
 
-def comparison_bars(histories: Dict[str, dict]):
-    """Bar chart comparing final eval mean reward (+/- std)."""
+def comparison_bars(histories: Dict[str, dict], agg: Optional[Dict[str, dict]] = None):
+    """Bar chart comparing eval mean reward (+/- std).
+
+    If ``agg`` (the multi-seed aggregate from ``experiment.json``) is provided,
+    bars show the across-seed mean ± std — a fairer comparison than a single run.
+    """
     fig, ax = plt.subplots(figsize=(7.5, 4.5), dpi=120)
     algos, means, stds, colors = [], [], [], []
     for algo, hist in histories.items():
-        if "eval_mean" not in hist:
+        a = (agg or {}).get(algo)
+        if a:
+            mean, std = a["eval_mean_avg"], a["eval_mean_std"]
+        elif "eval_mean" in hist:
+            mean, std = hist["eval_mean"], hist.get("eval_std", 0.0)
+        else:
             continue
         algos.append(LABELS.get(algo, algo))
-        means.append(hist["eval_mean"])
-        stds.append(hist.get("eval_std", 0.0))
+        means.append(mean)
+        stds.append(std)
         colors.append(COLORS.get(algo, "#888"))
     x = np.arange(len(algos))
     bars = ax.bar(x, means, yerr=stds, capsize=6, color=colors, alpha=0.85)
@@ -118,7 +127,8 @@ def comparison_bars(histories: Dict[str, dict]):
     ax.set_xticks(x)
     ax.set_xticklabels(algos)
     ax.set_ylabel("Mean eval reward (50 eps)")
-    ax.set_title("Final performance comparison")
+    title = "Hiệu năng trung bình qua 3 seed (± std)" if agg else "Final performance comparison"
+    ax.set_title(title)
     ax.legend(loc="lower right")
     fig.tight_layout()
     return fig
