@@ -3,8 +3,11 @@
 The ``Policy`` network follows the architecture from the slides (Exercise 3):
     State -> FC1 -> ReLU -> FC2 (hidden*2) -> ReLU -> FC3 -> softmax
 
-``PolicyWithValue`` adds a separate value head used by the REINFORCE-with-baseline
-agent to estimate the state-value V(s) and reduce gradient variance.
+``PolicyWithValue`` pairs that policy with a *separate* value network used by the
+REINFORCE-with-baseline agent to estimate the state-value V(s) and reduce
+gradient variance. The two networks are kept independent on purpose: the value
+function is trained on the (large-magnitude) raw returns, so sharing a trunk
+would let the value loss dominate and corrupt the policy features.
 """
 
 from __future__ import annotations
@@ -51,26 +54,35 @@ class Policy(nn.Module):
 
 
 class PolicyWithValue(nn.Module):
-    """Policy network with a shared trunk and a separate value head.
+    """Policy network plus an independent value network.
 
-    Used by the REINFORCE-with-baseline agent. The value head V(s) is trained to
-    predict the discounted return and is subtracted from the return to form the
-    advantage A_t = G_t - V(s_t), which lowers the variance of the gradient
-    estimate without introducing bias.
+    Used by the REINFORCE-with-baseline agent. The value network V(s) is trained
+    to predict the discounted return G_t and is subtracted from the return to
+    form the advantage A_t = G_t - V(s_t), which lowers the variance of the
+    gradient estimate without introducing bias (Sutton & Barto, 13.4).
+
+    Policy and value use *separate* parameters so the value loss (computed on
+    raw, large-magnitude returns) cannot overwhelm the policy gradient.
     """
 
     def __init__(self, s_size: int, a_size: int, h_size: int = 64):
         super().__init__()
+        # Policy network (same architecture as ``Policy``).
         self.fc1 = nn.Linear(s_size, h_size)
         self.fc2 = nn.Linear(h_size, h_size * 2)
         self.policy_head = nn.Linear(h_size * 2, a_size)
+        # Independent value network V(s).
+        self.v_fc1 = nn.Linear(s_size, h_size)
+        self.v_fc2 = nn.Linear(h_size, h_size * 2)
         self.value_head = nn.Linear(h_size * 2, 1)
 
     def forward(self, x: torch.Tensor):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        probs = F.softmax(self.policy_head(x), dim=1)
-        value = self.value_head(x)
+        p = F.relu(self.fc1(x))
+        p = F.relu(self.fc2(p))
+        probs = F.softmax(self.policy_head(p), dim=1)
+        v = F.relu(self.v_fc1(x))
+        v = F.relu(self.v_fc2(v))
+        value = self.value_head(v)
         return probs, value
 
     def act(self, state: np.ndarray, device: torch.device):

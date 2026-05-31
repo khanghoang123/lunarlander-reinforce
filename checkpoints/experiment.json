@@ -1,0 +1,76 @@
+{
+  "reinforce": {
+    "n_seeds": 3,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "eval_mean_avg": 151.87744344528562,
+    "eval_mean_std": 35.79830530126821,
+    "per_seed_eval": [
+      143.3,
+      112.9,
+      199.4
+    ],
+    "per_seed_eval_std": [
+      91.5,
+      81.2,
+      117.6
+    ],
+    "best_avg_mean": 180.7042026283559,
+    "best_avg_std": 30.813077393529642,
+    "per_seed_best_avg": [
+      147.6,
+      172.7,
+      221.8
+    ],
+    "n_solved": 1,
+    "per_seed_solved": [
+      null,
+      null,
+      1177
+    ],
+    "success_rate_pct": 44.7,
+    "per_seed_eval_std_mean": 96.8,
+    "train_time_mean": 387.4500951766968,
+    "demo_seed": 0
+  },
+  "reinforce_baseline": {
+    "n_seeds": 3,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "eval_mean_avg": 177.6313145612083,
+    "eval_mean_std": 41.4693312958713,
+    "per_seed_eval": [
+      235.5,
+      140.7,
+      156.7
+    ],
+    "per_seed_eval_std": [
+      88.9,
+      22.2,
+      45.3
+    ],
+    "best_avg_mean": 197.75154237786364,
+    "best_avg_std": 26.252988160916804,
+    "per_seed_best_avg": [
+      234.1,
+      186.3,
+      172.9
+    ],
+    "n_solved": 1,
+    "per_seed_solved": [
+      1240,
+      null,
+      null
+    ],
+    "success_rate_pct": 36.0,
+    "per_seed_eval_std_mean": 52.2,
+    "train_time_mean": 689.7783347765604,
+    "demo_seed": 0
+  }
+}

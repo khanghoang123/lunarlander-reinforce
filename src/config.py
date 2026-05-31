@@ -12,7 +12,7 @@ DEFAULT_HPARAMS = {
     "n_training_episodes": 3000,
     "max_steps": 1000,
     "gamma": 0.99,
-    "lr": 3e-3,
+    "lr": 1e-3,
     "print_every": 100,
 }
 
